@@ -9,8 +9,56 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as UrlAnalyzerRouteImport } from './routes/url-analyzer'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as PhishingRouteImport } from './routes/phishing'
+import { Route as PasswordRouteImport } from './routes/password'
+import { Route as HeadersRouteImport } from './routes/headers'
+import { Route as ContactRouteImport } from './routes/contact'
+import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
 
+const UrlAnalyzerRoute = UrlAnalyzerRouteImport.update({
+  id: '/url-analyzer',
+  path: '/url-analyzer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PhishingRoute = PhishingRouteImport.update({
+  id: '/phishing',
+  path: '/phishing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PasswordRoute = PasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HeadersRoute = HeadersRouteImport.update({
+  id: '/headers',
+  path: '/headers',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -19,28 +67,144 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
+  '/headers': typeof HeadersRoute
+  '/password': typeof PasswordRoute
+  '/phishing': typeof PhishingRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
+  '/headers': typeof HeadersRoute
+  '/password': typeof PasswordRoute
+  '/phishing': typeof PhishingRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
+  '/headers': typeof HeadersRoute
+  '/password': typeof PasswordRoute
+  '/phishing': typeof PhishingRoute
+  '/reports': typeof ReportsRoute
+  '/settings': typeof SettingsRoute
+  '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/contact'
+    | '/headers'
+    | '/password'
+    | '/phishing'
+    | '/reports'
+    | '/settings'
+    | '/url-analyzer'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/about'
+    | '/contact'
+    | '/headers'
+    | '/password'
+    | '/phishing'
+    | '/reports'
+    | '/settings'
+    | '/url-analyzer'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/contact'
+    | '/headers'
+    | '/password'
+    | '/phishing'
+    | '/reports'
+    | '/settings'
+    | '/url-analyzer'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
+  ContactRoute: typeof ContactRoute
+  HeadersRoute: typeof HeadersRoute
+  PasswordRoute: typeof PasswordRoute
+  PhishingRoute: typeof PhishingRoute
+  ReportsRoute: typeof ReportsRoute
+  SettingsRoute: typeof SettingsRoute
+  UrlAnalyzerRoute: typeof UrlAnalyzerRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/url-analyzer': {
+      id: '/url-analyzer'
+      path: '/url-analyzer'
+      fullPath: '/url-analyzer'
+      preLoaderRoute: typeof UrlAnalyzerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/phishing': {
+      id: '/phishing'
+      path: '/phishing'
+      fullPath: '/phishing'
+      preLoaderRoute: typeof PhishingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/password': {
+      id: '/password'
+      path: '/password'
+      fullPath: '/password'
+      preLoaderRoute: typeof PasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/headers': {
+      id: '/headers'
+      path: '/headers'
+      fullPath: '/headers'
+      preLoaderRoute: typeof HeadersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -53,17 +217,15 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
+  ContactRoute: ContactRoute,
+  HeadersRoute: HeadersRoute,
+  PasswordRoute: PasswordRoute,
+  PhishingRoute: PhishingRoute,
+  ReportsRoute: ReportsRoute,
+  SettingsRoute: SettingsRoute,
+  UrlAnalyzerRoute: UrlAnalyzerRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
-
-import type { getRouter } from './router.tsx'
-import type { startInstance } from './start.ts'
-declare module '@tanstack/react-start' {
-  interface Register {
-    ssr: true
-    router: Awaited<ReturnType<typeof getRouter>>
-    config: Awaited<ReturnType<typeof startInstance.getOptions>>
-  }
-}
