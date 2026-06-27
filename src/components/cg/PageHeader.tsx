@@ -21,14 +21,16 @@ export function PageHeader({
     >
       <div>
         {eyebrow && (
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-border bg-card/50 px-3 py-1 text-[10px] font-mono uppercase tracking-[0.2em] text-neon">
-            <span className="h-1.5 w-1.5 rounded-full bg-neon shadow-[0_0_8px] shadow-neon" />
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border bg-card/40 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground backdrop-blur">
+            <span className="h-1.5 w-1.5 rounded-full bg-primary shadow-[0_0_10px] shadow-primary/60" />
             {eyebrow}
           </div>
         )}
-        <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{title}</h1>
+        <h1 className="text-3xl font-semibold tracking-tight md:text-[2.5rem] md:leading-[1.1]">
+          {title}
+        </h1>
         {description && (
-          <p className="mt-2 max-w-2xl text-sm text-muted-foreground md:text-base">
+          <p className="mt-3 max-w-2xl text-sm leading-relaxed text-muted-foreground md:text-base">
             {description}
           </p>
         )}
