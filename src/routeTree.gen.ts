@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UrlAnalyzerRouteImport } from './routes/url-analyzer'
 import { Route as PasswordRouteImport } from './routes/password'
+import { Route as HeadersRouteImport } from './routes/headers'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UrlAnalyzerRoute = UrlAnalyzerRouteImport.update({
@@ -23,6 +24,11 @@ const PasswordRoute = PasswordRouteImport.update({
   path: '/password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const HeadersRoute = HeadersRouteImport.update({
+  id: '/headers',
+  path: '/headers',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -31,30 +37,34 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/headers': typeof HeadersRoute
   '/password': typeof PasswordRoute
   '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/headers': typeof HeadersRoute
   '/password': typeof PasswordRoute
   '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/headers': typeof HeadersRoute
   '/password': typeof PasswordRoute
   '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/password' | '/url-analyzer'
+  fullPaths: '/' | '/headers' | '/password' | '/url-analyzer'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/password' | '/url-analyzer'
-  id: '__root__' | '/' | '/password' | '/url-analyzer'
+  to: '/' | '/headers' | '/password' | '/url-analyzer'
+  id: '__root__' | '/' | '/headers' | '/password' | '/url-analyzer'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  HeadersRoute: typeof HeadersRoute
   PasswordRoute: typeof PasswordRoute
   UrlAnalyzerRoute: typeof UrlAnalyzerRoute
 }
@@ -75,6 +85,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/headers': {
+      id: '/headers'
+      path: '/headers'
+      fullPath: '/headers'
+      preLoaderRoute: typeof HeadersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,6 +104,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  HeadersRoute: HeadersRoute,
   PasswordRoute: PasswordRoute,
   UrlAnalyzerRoute: UrlAnalyzerRoute,
 }
