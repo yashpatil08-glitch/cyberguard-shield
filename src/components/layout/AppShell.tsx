@@ -18,20 +18,27 @@ import { useState, type ReactNode } from "react";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 
-const NAV = [
+type NavItem = {
+  to: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  exact?: boolean;
+};
+
+const NAV: NavItem[] = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, exact: true },
   { to: "/url-analyzer", label: "URL Analyzer", icon: Globe },
   { to: "/password", label: "Password Strength", icon: KeyRound },
   { to: "/headers", label: "Security Headers", icon: ShieldCheck },
   { to: "/phishing", label: "Phishing Detector", icon: Fish },
   { to: "/reports", label: "Reports", icon: FileText },
-] as const;
+];
 
-const SECONDARY = [
+const SECONDARY: NavItem[] = [
   { to: "/about", label: "About", icon: Info },
   { to: "/contact", label: "Contact", icon: Mail },
   { to: "/settings", label: "Settings", icon: Settings },
-] as const;
+];
 
 export function AppShell({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
