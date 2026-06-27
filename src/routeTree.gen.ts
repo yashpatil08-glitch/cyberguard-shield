@@ -10,11 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UrlAnalyzerRouteImport } from './routes/url-analyzer'
+import { Route as PasswordRouteImport } from './routes/password'
 import { Route as IndexRouteImport } from './routes/index'
 
 const UrlAnalyzerRoute = UrlAnalyzerRouteImport.update({
   id: '/url-analyzer',
   path: '/url-analyzer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PasswordRoute = PasswordRouteImport.update({
+  id: '/password',
+  path: '/password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -25,27 +31,31 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/password': typeof PasswordRoute
   '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/password': typeof PasswordRoute
   '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/password': typeof PasswordRoute
   '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/url-analyzer'
+  fullPaths: '/' | '/password' | '/url-analyzer'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/url-analyzer'
-  id: '__root__' | '/' | '/url-analyzer'
+  to: '/' | '/password' | '/url-analyzer'
+  id: '__root__' | '/' | '/password' | '/url-analyzer'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  PasswordRoute: typeof PasswordRoute
   UrlAnalyzerRoute: typeof UrlAnalyzerRoute
 }
 
@@ -56,6 +66,13 @@ declare module '@tanstack/react-router' {
       path: '/url-analyzer'
       fullPath: '/url-analyzer'
       preLoaderRoute: typeof UrlAnalyzerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/password': {
+      id: '/password'
+      path: '/password'
+      fullPath: '/password'
+      preLoaderRoute: typeof PasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -70,6 +87,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  PasswordRoute: PasswordRoute,
   UrlAnalyzerRoute: UrlAnalyzerRoute,
 }
 export const routeTree = rootRouteImport
