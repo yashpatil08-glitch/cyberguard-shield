@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as UrlAnalyzerRouteImport } from './routes/url-analyzer'
+import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as PhishingRouteImport } from './routes/phishing'
 import { Route as PasswordRouteImport } from './routes/password'
 import { Route as HeadersRouteImport } from './routes/headers'
@@ -18,6 +19,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const UrlAnalyzerRoute = UrlAnalyzerRouteImport.update({
   id: '/url-analyzer',
   path: '/url-analyzer',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportsRoute = ReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PhishingRoute = PhishingRouteImport.update({
@@ -46,6 +52,7 @@ export interface FileRoutesByFullPath {
   '/headers': typeof HeadersRoute
   '/password': typeof PasswordRoute
   '/phishing': typeof PhishingRoute
+  '/reports': typeof ReportsRoute
   '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRoutesByTo {
@@ -53,6 +60,7 @@ export interface FileRoutesByTo {
   '/headers': typeof HeadersRoute
   '/password': typeof PasswordRoute
   '/phishing': typeof PhishingRoute
+  '/reports': typeof ReportsRoute
   '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRoutesById {
@@ -61,19 +69,33 @@ export interface FileRoutesById {
   '/headers': typeof HeadersRoute
   '/password': typeof PasswordRoute
   '/phishing': typeof PhishingRoute
+  '/reports': typeof ReportsRoute
   '/url-analyzer': typeof UrlAnalyzerRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/headers' | '/password' | '/phishing' | '/url-analyzer'
+  fullPaths:
+    | '/'
+    | '/headers'
+    | '/password'
+    | '/phishing'
+    | '/reports'
+    | '/url-analyzer'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/headers' | '/password' | '/phishing' | '/url-analyzer'
+  to:
+    | '/'
+    | '/headers'
+    | '/password'
+    | '/phishing'
+    | '/reports'
+    | '/url-analyzer'
   id:
     | '__root__'
     | '/'
     | '/headers'
     | '/password'
     | '/phishing'
+    | '/reports'
     | '/url-analyzer'
   fileRoutesById: FileRoutesById
 }
@@ -82,6 +104,7 @@ export interface RootRouteChildren {
   HeadersRoute: typeof HeadersRoute
   PasswordRoute: typeof PasswordRoute
   PhishingRoute: typeof PhishingRoute
+  ReportsRoute: typeof ReportsRoute
   UrlAnalyzerRoute: typeof UrlAnalyzerRoute
 }
 
@@ -92,6 +115,13 @@ declare module '@tanstack/react-router' {
       path: '/url-analyzer'
       fullPath: '/url-analyzer'
       preLoaderRoute: typeof UrlAnalyzerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reports': {
+      id: '/reports'
+      path: '/reports'
+      fullPath: '/reports'
+      preLoaderRoute: typeof ReportsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/phishing': {
@@ -130,6 +160,7 @@ const rootRouteChildren: RootRouteChildren = {
   HeadersRoute: HeadersRoute,
   PasswordRoute: PasswordRoute,
   PhishingRoute: PhishingRoute,
+  ReportsRoute: ReportsRoute,
   UrlAnalyzerRoute: UrlAnalyzerRoute,
 }
 export const routeTree = rootRouteImport
