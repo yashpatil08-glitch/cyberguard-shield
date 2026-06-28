@@ -1,0 +1,18 @@
+# CyberGuard Backend — Python 3.12
+# Install with: pip install -r requirements.txt
+
+# DNS resolution
+dnspython==2.6.1
+
+# WHOIS lookups
+python-whois==0.9.4
+
+# PDF generation
+reportlab==4.2.0
+
+# HTTP requests (optional helper for redirect inspection)
+requests==2.32.3
+urllib3==2.2.2
+
+# Type stubs (development only — safe to omit in production)
+# mypy==1.10.0
