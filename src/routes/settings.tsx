@@ -29,9 +29,7 @@ function SettingsPage() {
 
   const save = () => {
     saveSettings(s);
-    // Note: VITE_CYBERGUARD_API_URL set at build time; runtime override via localStorage requires a small adapter.
-    // For immediate effect, the API client could be extended; we persist and inform.
-    toast.success("Settings saved. Reload to apply the API URL.");
+    toast.success("Settings saved — API URL is active immediately.");
   };
 
   const test = async () => {
@@ -41,7 +39,7 @@ function SettingsPage() {
     }
     setStatus("checking");
     try {
-      const res = await fetch(`${s.apiUrl.replace(/\/$/, "")}/`, { method: "GET" });
+      const res = await fetch(`${s.apiUrl.replace(/\/$/, "")}/api/health`, { method: "GET" });
       setStatus(res.ok ? "ok" : "fail");
     } catch {
       setStatus("fail");
