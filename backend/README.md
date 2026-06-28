@@ -20,11 +20,13 @@ Interactive docs: `/docs` (Swagger) and `/redoc`.
 
 ## Local development
 
+Run from the **repo root** (the internal modules use absolute
+`from backend...` imports):
+
 ```bash
-cd backend
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload
+pip install -r backend/requirements.txt
+uvicorn backend.app.main:app --reload
 ```
 
 Server runs on http://127.0.0.1:8000.
@@ -42,7 +44,7 @@ Server runs on http://127.0.0.1:8000.
 The start command is:
 
 ```
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
+uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
 ```
 
 ## Environment variables
