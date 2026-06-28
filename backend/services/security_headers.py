@@ -23,37 +23,39 @@ logger = logging.getLogger(__name__)
 # Header analysis configuration
 # ---------------------------------------------------------------------------
 
-# Expected / recommended values for quick correctness checks
+# Expected / recommended values for quick correctness checks.
+# `check_fn` is stored as a function name (string) and resolved lazily in
+# `check()` to avoid forward-reference NameErrors at import time.
 _HEADER_GUIDANCE: dict[str, dict] = {
     "Strict-Transport-Security": {
         "description": "Forces HTTPS connections for a specified duration.",
         "recommended": "max-age=31536000; includeSubDomains",
-        "check_fn": _check_hsts,
+        "check_fn": "_check_hsts",
     },
     "Content-Security-Policy": {
         "description": "Restricts sources for scripts, styles, and other resources.",
         "recommended": "default-src 'self'",
-        "check_fn": _check_csp,
+        "check_fn": "_check_csp",
     },
     "X-Frame-Options": {
         "description": "Prevents the page from being embedded in an iframe (clickjacking).",
         "recommended": "DENY or SAMEORIGIN",
-        "check_fn": _check_x_frame,
+        "check_fn": "_check_x_frame",
     },
     "X-Content-Type-Options": {
         "description": "Prevents MIME-type sniffing by the browser.",
         "recommended": "nosniff",
-        "check_fn": _check_xcto,
+        "check_fn": "_check_xcto",
     },
     "Referrer-Policy": {
         "description": "Controls how much referrer information is included in requests.",
         "recommended": "strict-origin-when-cross-origin",
-        "check_fn": _check_referrer,
+        "check_fn": "_check_referrer",
     },
     "Permissions-Policy": {
         "description": "Controls access to browser features like camera, microphone, geolocation.",
         "recommended": "geolocation=(), microphone=(), camera=()",
-        "check_fn": _check_permissions,
+        "check_fn": "_check_permissions",
     },
 }
 
@@ -128,7 +130,8 @@ class SecurityHeadersChecker:
             lower_key = header_name.lower()
             value = lower_headers.get(lower_key)
             guidance = _HEADER_GUIDANCE.get(header_name, {})
-            check_fn = guidance.get("check_fn")
+            _fn_name = guidance.get("check_fn")
+            check_fn = globals().get(_fn_name) if isinstance(_fn_name, str) else _fn_name
 
             if value is None:
                 # Header missing
