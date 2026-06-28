@@ -1,0 +1,1 @@
+"""Reserved for future ORM models. Currently unused — analyses are stateless."""

@@ -1,0 +1,541 @@
+"""
+backend/services/pdf_generator.py
+
+Professional PDF Report Generator for CyberGuard.
+Produces a styled, multi-section security report using ReportLab.
+Supports URL analysis, password, headers, and phishing report types.
+"""
+
+import io
+import logging
+from datetime import datetime, timezone
+from typing import Any
+
+from reportlab.lib import colors
+from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import (
+    BaseDocTemplate,
+    Frame,
+    HRFlowable,
+    PageTemplate,
+    Paragraph,
+    Spacer,
+    Table,
+    TableStyle,
+)
+from reportlab.platypus.flowables import KeepTogether
+
+logger = logging.getLogger(__name__)
+
+# ---------------------------------------------------------------------------
+# Colour Palette
+# ---------------------------------------------------------------------------
+_BRAND_DARK = colors.HexColor("#0F172A")      # slate-900
+_BRAND_PRIMARY = colors.HexColor("#3B82F6")   # blue-500
+_BRAND_ACCENT = colors.HexColor("#06B6D4")    # cyan-500
+_RISK_LOW = colors.HexColor("#22C55E")        # green-500
+_RISK_MEDIUM = colors.HexColor("#F59E0B")     # amber-500
+_RISK_HIGH = colors.HexColor("#EF4444")       # red-500
+_RISK_CRITICAL = colors.HexColor("#7C3AED")   # violet-600
+_GREY_100 = colors.HexColor("#F1F5F9")
+_GREY_300 = colors.HexColor("#CBD5E1")
+_GREY_600 = colors.HexColor("#475569")
+_WHITE = colors.white
+
+PAGE_W, PAGE_H = A4
+MARGIN = 20 * mm
+
+
+def _risk_color(level: str) -> colors.Color:
+    return {
+        "Low": _RISK_LOW,
+        "Medium": _RISK_MEDIUM,
+        "High": _RISK_HIGH,
+        "Critical": _RISK_CRITICAL,
+    }.get(level, _GREY_600)
+
+
+# ---------------------------------------------------------------------------
+# Style Sheet
+# ---------------------------------------------------------------------------
+
+def _build_styles() -> dict[str, ParagraphStyle]:
+    base = getSampleStyleSheet()
+    return {
+        "title": ParagraphStyle(
+            "CG_Title",
+            fontName="Helvetica-Bold",
+            fontSize=24,
+            textColor=_WHITE,
+            alignment=TA_CENTER,
+            spaceAfter=4,
+        ),
+        "subtitle": ParagraphStyle(
+            "CG_Subtitle",
+            fontName="Helvetica",
+            fontSize=10,
+            textColor=_BRAND_ACCENT,
+            alignment=TA_CENTER,
+            spaceAfter=2,
+        ),
+        "section": ParagraphStyle(
+            "CG_Section",
+            fontName="Helvetica-Bold",
+            fontSize=13,
+            textColor=_BRAND_PRIMARY,
+            spaceBefore=12,
+            spaceAfter=4,
+        ),
+        "body": ParagraphStyle(
+            "CG_Body",
+            fontName="Helvetica",
+            fontSize=9,
+            textColor=_BRAND_DARK,
+            spaceAfter=3,
+            leading=13,
+        ),
+        "body_small": ParagraphStyle(
+            "CG_BodySmall",
+            fontName="Helvetica",
+            fontSize=8,
+            textColor=_GREY_600,
+            spaceAfter=2,
+            leading=11,
+        ),
+        "label": ParagraphStyle(
+            "CG_Label",
+            fontName="Helvetica-Bold",
+            fontSize=9,
+            textColor=_BRAND_DARK,
+        ),
+        "mono": ParagraphStyle(
+            "CG_Mono",
+            fontName="Courier",
+            fontSize=8,
+            textColor=_BRAND_DARK,
+            spaceAfter=2,
+        ),
+        "rec": ParagraphStyle(
+            "CG_Rec",
+            fontName="Helvetica",
+            fontSize=8,
+            textColor=_BRAND_DARK,
+            leftIndent=10,
+            spaceAfter=3,
+            leading=12,
+        ),
+        "footer": ParagraphStyle(
+            "CG_Footer",
+            fontName="Helvetica",
+            fontSize=7,
+            textColor=_GREY_600,
+            alignment=TA_CENTER,
+        ),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Page Templates (header / footer)
+# ---------------------------------------------------------------------------
+
+def _header_footer(canvas, doc):
+    """Draw repeating header bar and footer on every page."""
+    canvas.saveState()
+
+    # Top bar
+    canvas.setFillColor(_BRAND_DARK)
+    canvas.rect(0, PAGE_H - 14 * mm, PAGE_W, 14 * mm, fill=1, stroke=0)
+    canvas.setFillColor(_BRAND_PRIMARY)
+    canvas.setFont("Helvetica-Bold", 10)
+    canvas.drawString(MARGIN, PAGE_H - 9 * mm, "CyberGuard")
+    canvas.setFillColor(_GREY_300)
+    canvas.setFont("Helvetica", 8)
+    canvas.drawRightString(PAGE_W - MARGIN, PAGE_H - 9 * mm, "Security Analysis Report")
+
+    # Footer
+    canvas.setFillColor(_GREY_600)
+    canvas.setFont("Helvetica", 7)
+    canvas.drawCentredString(
+        PAGE_W / 2,
+        8 * mm,
+        f"Page {doc.page}  •  Generated by CyberGuard  •  Confidential",
+    )
+    canvas.restoreState()
+
+
+# ---------------------------------------------------------------------------
+# PDF Generator Class
+# ---------------------------------------------------------------------------
+
+class PDFGenerator:
+    """
+    Generates a professional CyberGuard security PDF report.
+
+    Usage:
+        gen = PDFGenerator()
+        pdf_bytes = gen.generate(
+            report_type="url",
+            scan_data=analyzer.analyze("https://example.com"),
+            title="URL Security Report",
+        )
+        with open("report.pdf", "wb") as f:
+            f.write(pdf_bytes)
+    """
+
+    def generate(
+        self,
+        scan_data: dict[str, Any],
+        report_type: str = "url",
+        title: str = "Security Analysis Report",
+    ) -> bytes:
+        """
+        Generate the PDF and return it as bytes.
+
+        Args:
+            scan_data:   Output dict from any CyberGuard analyser.
+            report_type: One of "url" | "password" | "headers" | "phishing".
+            title:       Report title displayed on the cover section.
+
+        Returns:
+            PDF file as raw bytes.
+        """
+        styles = _build_styles()
+        buffer = io.BytesIO()
+
+        doc = BaseDocTemplate(
+            buffer,
+            pagesize=A4,
+            leftMargin=MARGIN,
+            rightMargin=MARGIN,
+            topMargin=20 * mm,
+            bottomMargin=18 * mm,
+        )
+        frame = Frame(
+            MARGIN, 18 * mm,
+            PAGE_W - 2 * MARGIN, PAGE_H - 36 * mm,
+            id="main",
+        )
+        template = PageTemplate(id="main", frames=[frame], onPage=_header_footer)
+        doc.addPageTemplates([template])
+
+        story: list = []
+
+        # Cover block
+        story += _build_cover(title, report_type, styles)
+        story.append(Spacer(1, 6 * mm))
+
+        # Scan summary
+        story += _build_summary(scan_data, report_type, styles)
+        story.append(Spacer(1, 4 * mm))
+
+        # Type-specific sections
+        if report_type == "url":
+            story += _build_url_sections(scan_data, styles)
+        elif report_type == "password":
+            story += _build_password_sections(scan_data, styles)
+        elif report_type == "headers":
+            story += _build_headers_sections(scan_data, styles)
+        elif report_type == "phishing":
+            story += _build_phishing_sections(scan_data, styles)
+
+        # Risk & findings
+        risk = scan_data.get("risk") or scan_data
+        story += _build_findings(risk, styles)
+
+        # Recommendations
+        story += _build_recommendations(scan_data, styles)
+
+        doc.build(story)
+        return buffer.getvalue()
+
+
+# ---------------------------------------------------------------------------
+# Section Builders
+# ---------------------------------------------------------------------------
+
+def _build_cover(title: str, report_type: str, s: dict) -> list:
+    now = datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+    cover_data = [
+        [Paragraph("🛡 CyberGuard", s["title"])],
+        [Paragraph(title, s["subtitle"])],
+        [Paragraph(f"Report Type: {report_type.upper()}  •  Generated: {now}", s["subtitle"])],
+    ]
+    tbl = Table(cover_data, colWidths=[PAGE_W - 2 * MARGIN])
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, -1), _BRAND_DARK),
+        ("TOPPADDING", (0, 0), (-1, -1), 8),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("LEFTPADDING", (0, 0), (-1, -1), 12),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 12),
+    ]))
+    return [tbl]
+
+
+def _build_summary(data: dict, report_type: str, s: dict) -> list:
+    elements = [
+        Paragraph("Scan Summary", s["section"]),
+        HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4),
+    ]
+
+    risk = data.get("risk", {})
+    score = risk.get("score", data.get("score", "N/A"))
+    level = risk.get("risk_level", data.get("risk_level", data.get("strength", "N/A")))
+    target = (
+        data.get("url")
+        or data.get("domain")
+        or f"Password analysis ({data.get('length', '?')} chars)"
+    )
+
+    summary_rows = [
+        ["Target", _truncate(str(target), 70)],
+        ["Report Type", report_type.upper()],
+        ["Risk Score", f"{score} / 100"],
+        ["Risk Level", str(level)],
+        ["Scan Time", datetime.now(tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")],
+    ]
+
+    tbl = _kv_table(summary_rows, s, level_col=3)
+    elements.append(tbl)
+    return elements
+
+
+def _build_url_sections(data: dict, s: dict) -> list:
+    elements = [Paragraph("URL Analysis Details", s["section"]),
+                HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4)]
+
+    rows = [
+        ["URL", _truncate(data.get("url", ""), 65)],
+        ["Valid", _bool(data.get("valid"))],
+        ["HTTPS", _bool(data.get("https"))],
+        ["URL Length", str(data.get("url_length", ""))],
+        ["Subdomains", str(data.get("subdomain_count", ""))],
+        ["Hyphens in Host", str(data.get("hyphen_count", ""))],
+        ["Dots", str(data.get("dot_count", ""))],
+        ["TLD", data.get("tld", "")],
+        ["Suspicious TLD", _bool(data.get("suspicious_tld"), invert=True)],
+        ["IP URL", _bool(data.get("is_ip_url"), invert=True)],
+        ["URL Shortener", _bool(data.get("is_shortener"), invert=True)],
+        ["Punycode", _bool(data.get("has_punycode"), invert=True)],
+        ["Unicode chars", _bool(data.get("has_unicode"), invert=True)],
+        ["@ Symbol", _bool(data.get("has_at_symbol"), invert=True)],
+    ]
+    kw = data.get("suspicious_keywords", [])
+    if kw:
+        rows.append(["Suspicious Keywords", ", ".join(kw[:8])])
+
+    elements.append(_kv_table(rows, s))
+
+    # Redirects
+    redirects = data.get("redirects", [])
+    if redirects:
+        elements.append(Spacer(1, 3 * mm))
+        elements.append(Paragraph("Redirect Chain", s["section"]))
+        elements.append(HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4))
+        for i, r in enumerate(redirects, 1):
+            elements.append(Paragraph(f"{i}. {_truncate(r, 80)}", s["mono"]))
+
+    # SSL
+    ssl = data.get("ssl") or {}
+    if ssl:
+        elements.append(Spacer(1, 3 * mm))
+        elements.append(Paragraph("SSL Certificate", s["section"]))
+        elements.append(HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4))
+        ssl_rows = [
+            ["Valid", _bool(ssl.get("valid"))],
+            ["TLS Version", str(ssl.get("tls_version", ""))],
+            ["Expiry Status", str(ssl.get("expiry_status", ""))],
+            ["Days Remaining", str(ssl.get("days_remaining", ""))],
+            ["Expiry Date", str(ssl.get("not_after", ""))],
+        ]
+        issuer = ssl.get("issuer") or {}
+        if issuer.get("organizationName"):
+            ssl_rows.append(["Issuer", issuer["organizationName"]])
+        elements.append(_kv_table(ssl_rows, s))
+
+    return elements
+
+
+def _build_password_sections(data: dict, s: dict) -> list:
+    elements = [Paragraph("Password Analysis Details", s["section"]),
+                HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4)]
+    rows = [
+        ["Strength", data.get("strength", "")],
+        ["Score", f"{data.get('score', 0)} / 100"],
+        ["Length", str(data.get("length", ""))],
+        ["Entropy", f"{data.get('entropy', 0):.2f} bits"],
+        ["Charset Size", str(data.get("charset_size", ""))],
+        ["Uppercase", _bool(data.get("has_uppercase"))],
+        ["Lowercase", _bool(data.get("has_lowercase"))],
+        ["Digits", _bool(data.get("has_digits"))],
+        ["Special Chars", _bool(data.get("has_special"))],
+        ["Repeated Chars", _bool(not data.get("has_repeated_chars"))],
+        ["Sequential Chars", _bool(not data.get("has_sequential_chars"))],
+        ["Common Password", _bool(not data.get("is_common_password"))],
+        ["Crack Time", data.get("crack_time_estimate", "")],
+    ]
+    elements.append(_kv_table(rows, s))
+    return elements
+
+
+def _build_headers_sections(data: dict, s: dict) -> list:
+    elements = [Paragraph("Security Headers Analysis", s["section"]),
+                HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4)]
+
+    rows = [
+        ["URL", _truncate(data.get("url", ""), 65)],
+        ["Score", f"{data.get('score', 0)} / 100"],
+        ["Grade", data.get("grade", "")],
+        ["Risk Level", data.get("risk_level", "")],
+    ]
+    elements.append(_kv_table(rows, s))
+    elements.append(Spacer(1, 3 * mm))
+
+    # Per-header table
+    findings = data.get("findings", [])
+    if findings:
+        elements.append(Paragraph("Header Findings", s["section"]))
+        elements.append(HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4))
+        header_rows = [["Header", "Status", "Score", "Note"]]
+        for f in findings:
+            status_color = _RISK_LOW if f["present"] else _RISK_HIGH
+            header_rows.append([
+                f["header"],
+                "✓ Present" if f["present"] else "✗ Missing",
+                f"{f['score']}/{f['max_score']}",
+                _truncate(f.get("note", ""), 50),
+            ])
+        col_w = [(PAGE_W - 2 * MARGIN) * x for x in (0.35, 0.15, 0.1, 0.4)]
+        tbl = Table(header_rows, colWidths=col_w)
+        tbl.setStyle(_findings_table_style())
+        elements.append(tbl)
+
+    return elements
+
+
+def _build_phishing_sections(data: dict, s: dict) -> list:
+    elements = [Paragraph("Phishing Detection Results", s["section"]),
+                HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4)]
+    rows = [
+        ["URL", _truncate(data.get("url", ""), 65)],
+        ["Phishing Score", f"{data.get('score', 0)} / 100"],
+        ["Risk Level", data.get("risk_level", "")],
+        ["Verdict", "⚠ PHISHING DETECTED" if data.get("is_phishing") else "✓ LIKELY SAFE"],
+        ["Confidence", data.get("confidence", "")],
+    ]
+    elements.append(_kv_table(rows, s))
+    explanation = data.get("explanation", "")
+    if explanation:
+        elements.append(Spacer(1, 3 * mm))
+        elements.append(Paragraph("Explanation", s["section"]))
+        elements.append(HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4))
+        elements.append(Paragraph(explanation, s["body"]))
+    return elements
+
+
+def _build_findings(risk: dict, s: dict) -> list:
+    findings = risk.get("findings", [])
+    if not findings:
+        return []
+
+    elements = [
+        Spacer(1, 4 * mm),
+        Paragraph("Risk Findings", s["section"]),
+        HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4),
+    ]
+
+    rows = [["Severity", "Label", "Score", "Description"]]
+    for f in findings:
+        rows.append([
+            f.get("severity", ""),
+            f.get("label", ""),
+            str(f.get("score", "")),
+            _truncate(f.get("description", ""), 60),
+        ])
+
+    col_w = [(PAGE_W - 2 * MARGIN) * x for x in (0.12, 0.2, 0.08, 0.6)]
+    tbl = Table(rows, colWidths=col_w)
+    tbl.setStyle(_findings_table_style())
+    elements.append(tbl)
+    return elements
+
+
+def _build_recommendations(data: dict, s: dict) -> list:
+    recs = (
+        data.get("recommendations")
+        or data.get("risk", {}).get("recommendations")
+        or data.get("suggestions")
+        or []
+    )
+    if not recs:
+        return []
+
+    elements = [
+        Spacer(1, 4 * mm),
+        Paragraph("Recommendations", s["section"]),
+        HRFlowable(width="100%", thickness=1, color=_GREY_300, spaceAfter=4),
+    ]
+    for i, rec in enumerate(recs, 1):
+        elements.append(Paragraph(f"{i}. {rec}", s["rec"]))
+
+    return elements
+
+
+# ---------------------------------------------------------------------------
+# Table Helpers
+# ---------------------------------------------------------------------------
+
+def _kv_table(rows: list[list], s: dict, level_col: int | None = None) -> Table:
+    """Build a two-column key-value table."""
+    col_w = [(PAGE_W - 2 * MARGIN) * 0.28, (PAGE_W - 2 * MARGIN) * 0.72]
+    styled_rows = []
+    for row in rows:
+        styled_rows.append([
+            Paragraph(str(row[0]), s["label"]),
+            Paragraph(str(row[1]) if len(row) > 1 else "", s["body"]),
+        ])
+    tbl = Table(styled_rows, colWidths=col_w)
+    tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), _GREY_100),
+        ("GRID", (0, 0), (-1, -1), 0.5, _GREY_300),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ]))
+    return tbl
+
+
+def _findings_table_style() -> TableStyle:
+    return TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), _BRAND_DARK),
+        ("TEXTCOLOR", (0, 0), (-1, 0), _WHITE),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, -1), 8),
+        ("GRID", (0, 0), (-1, -1), 0.5, _GREY_300),
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [_WHITE, _GREY_100]),
+        ("TOPPADDING", (0, 0), (-1, -1), 4),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+        ("LEFTPADDING", (0, 0), (-1, -1), 5),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+    ])
+
+
+# ---------------------------------------------------------------------------
+# Utility
+# ---------------------------------------------------------------------------
+
+def _bool(value: Any, invert: bool = False) -> str:
+    """Format a boolean as a ✓ / ✗ string. invert=True treats True as bad."""
+    b = bool(value)
+    if invert:
+        b = not b
+    return "✓ Yes" if b else "✗ No"
+
+
+def _truncate(text: str, max_len: int) -> str:
+    return text if len(text) <= max_len else text[:max_len - 3] + "..."

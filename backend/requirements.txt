@@ -1,0 +1,18 @@
+# CyberGuard Backend — Python 3.12
+# Install with: pip install -r requirements.txt
+
+# --- Web framework ---------------------------------------------------------
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+pydantic==2.9.2
+
+# --- Business-logic dependencies (unchanged) -------------------------------
+# DNS resolution
+dnspython==2.6.1
+# WHOIS lookups
+python-whois==0.9.4
+# PDF generation
+reportlab==4.2.0
+# HTTP requests (optional helper for redirect inspection)
+requests==2.32.3
+urllib3==2.2.2
