@@ -6,15 +6,32 @@
  * CORS must allow the app origin.
  */
 
-export const API_BASE: string =
+const BUILD_TIME_BASE: string =
   (import.meta.env.VITE_CYBERGUARD_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
 
+const RUNTIME_KEY = "cyberguard:api-url";
+
+/** Resolved base URL: runtime override (Settings) wins over build-time env. */
+export function getApiBase(): string {
+  if (typeof window !== "undefined") {
+    try {
+      const override = window.localStorage.getItem(RUNTIME_KEY);
+      if (override) return override.replace(/\/$/, "");
+    } catch {}
+  }
+  return BUILD_TIME_BASE;
+}
+
+/** Back-compat export — prefer `getApiBase()` for fresh reads. */
+export const API_BASE: string = BUILD_TIME_BASE;
+
 export const API_ROUTES = {
-  url: "/api/url/analyze",
-  password: "/api/password/analyze",
-  headers: "/api/headers/check",
-  phishing: "/api/phishing/analyze",
-  report: "/api/report/generate",
+  url: "/api/url-check",
+  password: "/api/password-strength",
+  headers: "/api/security-headers",
+  phishing: "/api/phishing-detect",
+  report: "/api/report",
+  health: "/api/health",
 } as const;
 
 export class ApiError extends Error {
@@ -24,21 +41,22 @@ export class ApiError extends Error {
 }
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  if (!API_BASE) {
+  const base = getApiBase();
+  if (!base) {
     throw new ApiError(
-      "Backend URL not configured. Set VITE_CYBERGUARD_API_URL in Settings.",
+      "Backend URL not configured. Paste your Render URL in Settings → Backend API.",
     );
   }
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, {
+    res = await fetch(`${base}${path}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     });
   } catch (e) {
     throw new ApiError(
-      `Network error reaching backend at ${API_BASE}. Is it running and CORS enabled?`,
+      `Network error reaching backend at ${base}. Is it running and CORS enabled?`,
     );
   }
   if (!res.ok) {
@@ -106,8 +124,9 @@ export const api = {
   checkHeaders: (url: string) => post<HeadersResult>(API_ROUTES.headers, { url }),
   analyzePhishing: (url: string) => post<PhishingResult>(API_ROUTES.phishing, { url }),
   generateReport: async (payload: unknown): Promise<Blob> => {
-    if (!API_BASE) throw new ApiError("Backend URL not configured.");
-    const res = await fetch(`${API_BASE}${API_ROUTES.report}`, {
+    const base = getApiBase();
+    if (!base) throw new ApiError("Backend URL not configured.");
+    const res = await fetch(`${base}${API_ROUTES.report}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -132,7 +151,10 @@ export function loadSettings(): AppSettings {
     if (raw) return JSON.parse(raw) as AppSettings;
   } catch {}
   return {
-    apiUrl: (import.meta.env.VITE_CYBERGUARD_API_URL as string | undefined) ?? "",
+    apiUrl:
+      (typeof window !== "undefined" && window.localStorage.getItem(RUNTIME_KEY)) ||
+      (import.meta.env.VITE_CYBERGUARD_API_URL as string | undefined) ||
+      "",
     profileName: "Security Analyst",
     profileEmail: "",
   };
@@ -140,5 +162,8 @@ export function loadSettings(): AppSettings {
 export function saveSettings(s: AppSettings) {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+    const trimmed = s.apiUrl.trim().replace(/\/$/, "");
+    if (trimmed) window.localStorage.setItem(RUNTIME_KEY, trimmed);
+    else window.localStorage.removeItem(RUNTIME_KEY);
   }
 }
