@@ -1,0 +1,23 @@
+# Render Blueprint for CyberGuard API
+# Deploy by pointing Render at this repo and selecting "New + Blueprint".
+services:
+  - type: web
+    name: cyberguard-api
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.4
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CORS_ORIGINS
+        # Comma-separated. Replace with your frontend origin(s) after deploy,
+        # e.g. https://your-app.lovable.app,https://yourdomain.com
+        value: "*"
