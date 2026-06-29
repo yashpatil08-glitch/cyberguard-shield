@@ -6,8 +6,11 @@
  * CORS must allow the app origin.
  */
 
+const DEFAULT_BASE = "https://cyberguard-api-y49i.onrender.com";
+
 const BUILD_TIME_BASE: string =
-  (import.meta.env.VITE_CYBERGUARD_API_URL as string | undefined)?.replace(/\/$/, "") ?? "";
+  (import.meta.env.VITE_CYBERGUARD_API_URL as string | undefined)?.replace(/\/$/, "") ||
+  DEFAULT_BASE;
 
 const RUNTIME_KEY = "cyberguard:api-url";
 
@@ -60,24 +63,104 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     );
   }
   if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new ApiError(text || `Request failed (${res.status})`, res.status);
+    let msg = `Request failed (${res.status})`;
+    try {
+      const txt = await res.text();
+      try {
+        const j = JSON.parse(txt);
+        msg = j?.detail || j?.message || txt || msg;
+      } catch {
+        if (txt) msg = txt;
+      }
+    } catch {}
+    throw new ApiError(msg, res.status);
   }
   return res.json() as Promise<T>;
 }
 
-/* ---------- Types matching the Python services ---------- */
+/* ---------- Types matching the live FastAPI backend ---------- */
+
+export interface Finding {
+  label?: string;
+  description?: string;
+  score?: number;
+  severity?: string;
+}
+
+export interface SSLInfo {
+  valid?: boolean;
+  issuer?: { commonName?: string; organizationName?: string; countryName?: string } | null;
+  subject?: { commonName?: string } | null;
+  not_before?: string | null;
+  not_after?: string | null;
+  days_remaining?: number | null;
+  expiry_status?: string | null;
+  tls_version?: string | null;
+  tls_trusted?: boolean | null;
+  san?: string[] | null;
+  error?: string | null;
+}
+
+export interface WhoisInfo {
+  domain?: string | null;
+  registrar?: string | null;
+  creation_date?: string | null;
+  expiry_date?: string | null;
+  updated_date?: string | null;
+  organization?: string | null;
+  country?: string | null;
+  name_servers?: string[] | null;
+  age_days?: number | null;
+  days_until_expiry?: number | null;
+  newly_registered?: boolean | null;
+  expiring_soon?: boolean | null;
+  found?: boolean;
+  error?: string | null;
+}
+
+export interface DnsRecordSet {
+  hostname?: string;
+  record_type?: string;
+  records?: Array<Record<string, unknown>>;
+  found?: boolean;
+  error?: string | null;
+}
+
+export interface DnsInfo {
+  hostname?: string;
+  results?: Record<string, DnsRecordSet>;
+}
 
 export interface UrlAnalysisResult {
   url: string;
-  is_https: boolean;
-  ssl?: { valid: boolean; issuer?: string; expires?: string; days_remaining?: number };
-  dns?: { a?: string[]; mx?: string[]; ns?: string[] };
-  whois?: { registrar?: string; created?: string; expires?: string; country?: string };
+  valid?: boolean;
+  https?: boolean;
+  ssl?: SSLInfo | null;
+  dns?: DnsInfo | null;
+  whois?: WhoisInfo | null;
   redirects?: string[];
-  risk_score: number;
-  findings: { severity: "low" | "medium" | "high" | "info"; message: string }[];
-  recommendations: string[];
+  final_url?: string;
+  url_length?: number;
+  subdomain_count?: number;
+  hyphen_count?: number;
+  dot_count?: number;
+  is_ip_url?: boolean;
+  is_shortener?: boolean;
+  has_punycode?: boolean;
+  has_unicode?: boolean;
+  has_at_symbol?: boolean;
+  has_hex_encoding?: boolean;
+  suspicious_tld?: boolean;
+  tld?: string;
+  suspicious_keywords?: string[];
+  risk?: {
+    score?: number;
+    raw_score?: number;
+    risk_level?: string;
+    findings?: Finding[];
+    recommendations?: string[];
+  };
+  error?: string | null;
 }
 
 export interface PasswordAnalysisResult {
@@ -98,23 +181,41 @@ export interface PasswordAnalysisResult {
   suggestions: string[];
 }
 
+export interface HeaderFinding {
+  header: string;
+  present: boolean;
+  value?: string | null;
+  score?: number;
+  max_score?: number;
+  status?: "good" | "weak" | "missing" | string;
+  note?: string;
+  description?: string;
+  recommended?: string;
+}
+
 export interface HeadersResult {
   url: string;
   score: number;
-  grade: string;
-  headers: Record<string, string | null>;
-  present: string[];
-  missing: string[];
-  recommendations: { header: string; message: string }[];
+  grade?: string;
+  risk_level?: string;
+  headers_found?: Record<string, string>;
+  findings?: HeaderFinding[];
+  recommendations?: string[];
+  error?: string | null;
 }
 
 export interface PhishingResult {
   url: string;
-  risk_score: number;
-  verdict: string;
-  indicators: { name: string; triggered: boolean; weight: number; description: string }[];
-  findings: string[];
-  recommendations: string[];
+  valid?: boolean;
+  score: number;
+  risk_level?: string;
+  is_phishing?: boolean;
+  confidence?: string;
+  findings?: Finding[];
+  explanation?: string;
+  recommendations?: string[];
+  checks_performed?: string[];
+  error?: string | null;
 }
 
 export const api = {
