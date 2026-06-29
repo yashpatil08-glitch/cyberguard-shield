@@ -8,7 +8,7 @@ import { ScoreGauge } from "@/components/cg/ScoreGauge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { api, type UrlAnalysisResult } from "@/lib/api";
+import { api, type UrlAnalysisResult, type Finding } from "@/lib/api";
 import { saveReport } from "@/lib/reports";
 
 export const Route = createFileRoute("/url-analyzer")({
@@ -34,12 +34,15 @@ function UrlAnalyzerPage() {
     try {
       const r = await api.analyzeUrl(url.trim());
       setResult(r);
+      const findings = r.risk?.findings ?? [];
+      let host = r.url;
+      try { host = new URL(r.url).hostname; } catch {}
       saveReport({
         kind: "url",
-        title: `URL scan — ${new URL(r.url).hostname}`,
+        title: `URL scan — ${host}`,
         target: r.url,
-        score: r.risk_score,
-        summary: `${r.findings.length} findings`,
+        score: r.risk?.score ?? 0,
+        summary: `${findings.length} findings · ${r.risk?.risk_level ?? "—"}`,
         data: r,
       });
       toast.success("Analysis complete");
@@ -97,15 +100,18 @@ function UrlAnalyzerPage() {
           >
             <div className="grid gap-6 lg:grid-cols-3">
               <div className="glass flex flex-col items-center justify-center rounded-xl p-6">
-                <ScoreGauge value={result.risk_score} label="Risk score" inverted />
-                <p className="mt-3 text-center text-xs text-muted-foreground">
+                <ScoreGauge value={result.risk?.score ?? 0} label="Risk score" inverted />
+                <p className="mt-2 text-center text-sm">
+                  Level: <span className="font-semibold">{result.risk?.risk_level ?? "—"}</span>
+                </p>
+                <p className="mt-1 text-center text-xs text-muted-foreground">
                   Lower is safer · 0–100 scale
                 </p>
               </div>
               <div className="glass rounded-xl p-6 lg:col-span-2">
                 <h3 className="mb-4 font-semibold">Connection</h3>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <Fact ok={result.is_https} label="HTTPS" value={result.is_https ? "Enabled" : "Not enabled"} icon={Lock} />
+                  <Fact ok={!!result.https} label="HTTPS" value={result.https ? "Enabled" : "Not enabled"} icon={Lock} />
                   <Fact
                     ok={result.ssl?.valid}
                     label="SSL certificate"
@@ -113,20 +119,22 @@ function UrlAnalyzerPage() {
                       result.ssl
                         ? result.ssl.valid
                           ? `Valid · ${result.ssl.days_remaining ?? "?"}d remaining`
-                          : "Invalid"
+                          : result.ssl.error || "Invalid"
                         : "Unavailable"
                     }
                   />
                   <Fact
                     label="Issuer"
-                    value={result.ssl?.issuer ?? "—"}
+                    value={
+                      result.ssl?.issuer?.organizationName ||
+                      result.ssl?.issuer?.commonName ||
+                      "—"
+                    }
                     info
                   />
-                  <Fact
-                    label="Expires"
-                    value={result.ssl?.expires ?? "—"}
-                    info
-                  />
+                  <Fact label="Expires" value={result.ssl?.not_after ?? "—"} info />
+                  <Fact label="TLS" value={result.ssl?.tls_version ?? "—"} info />
+                  <Fact label="Final URL" value={result.final_url ?? result.url} info />
                 </div>
               </div>
             </div>
@@ -134,16 +142,23 @@ function UrlAnalyzerPage() {
             <div className="grid gap-6 md:grid-cols-2">
               <div className="glass rounded-xl p-6">
                 <h3 className="mb-4 font-semibold">DNS records</h3>
-                <RecordList label="A" items={result.dns?.a} />
-                <RecordList label="MX" items={result.dns?.mx} />
-                <RecordList label="NS" items={result.dns?.ns} />
+                <RecordList label="A" items={extractDns(result, "A")} />
+                <RecordList label="AAAA" items={extractDns(result, "AAAA")} />
+                <RecordList label="MX" items={extractDns(result, "MX")} />
+                <RecordList label="NS" items={extractDns(result, "NS")} />
+                <RecordList label="TXT" items={extractDns(result, "TXT")} />
               </div>
               <div className="glass rounded-xl p-6">
                 <h3 className="mb-4 font-semibold">WHOIS</h3>
-                <KV k="Registrar" v={result.whois?.registrar} />
-                <KV k="Created" v={result.whois?.created} />
-                <KV k="Expires" v={result.whois?.expires} />
-                <KV k="Country" v={result.whois?.country} />
+                <KV k="Registrar" v={result.whois?.registrar ?? undefined} />
+                <KV k="Organization" v={result.whois?.organization ?? undefined} />
+                <KV k="Created" v={result.whois?.creation_date ?? undefined} />
+                <KV k="Expires" v={result.whois?.expiry_date ?? undefined} />
+                <KV k="Country" v={result.whois?.country ?? undefined} />
+                <KV
+                  k="Domain age"
+                  v={result.whois?.age_days != null ? `${result.whois.age_days} days` : undefined}
+                />
               </div>
             </div>
 
@@ -161,8 +176,8 @@ function UrlAnalyzerPage() {
               </div>
             )}
 
-            <FindingsList findings={result.findings} />
-            <RecommendationsList items={result.recommendations} />
+            <FindingsList findings={result.risk?.findings ?? []} />
+            <RecommendationsList items={result.risk?.recommendations ?? []} />
 
             <ReportActions payload={{ kind: "url", target: result.url, data: result }} />
           </motion.div>
@@ -170,6 +185,20 @@ function UrlAnalyzerPage() {
       </AnimatePresence>
     </AppShell>
   );
+}
+
+function extractDns(result: UrlAnalysisResult, type: string): string[] {
+  const set = result.dns?.results?.[type];
+  if (!set?.records?.length) return [];
+  return set.records.map((rec) => {
+    if (typeof rec === "string") return rec;
+    const r = rec as Record<string, unknown>;
+    if (r.address) return String(r.address);
+    if (r.exchange) return `${r.preference ?? ""} ${r.exchange}`.trim();
+    if (r.value) return String(r.value);
+    if (r.target) return String(r.target);
+    return JSON.stringify(rec);
+  });
 }
 
 function Fact({
@@ -220,8 +249,8 @@ function KV({ k, v }: { k: string; v?: string }) {
   );
 }
 
-export function FindingsList({ findings }: { findings: { severity: string; message: string }[] }) {
-  if (!findings.length) return null;
+export function FindingsList({ findings }: { findings: Finding[] }) {
+  if (!findings?.length) return null;
   return (
     <div className="glass rounded-xl p-6">
       <h3 className="mb-3 flex items-center gap-2 font-semibold">
@@ -229,22 +258,27 @@ export function FindingsList({ findings }: { findings: { severity: string; messa
       </h3>
       <ul className="space-y-2">
         {findings.map((f, i) => {
+          const sev = (f.severity || "info").toLowerCase();
           const colors: Record<string, string> = {
             high: "var(--danger)",
             medium: "var(--warn)",
             low: "var(--cyber)",
+            critical: "var(--danger)",
             info: "var(--muted-foreground)",
           };
-          const c = colors[f.severity] ?? "var(--muted-foreground)";
+          const c = colors[sev] ?? "var(--muted-foreground)";
           return (
             <li key={i} className="flex items-start gap-3 rounded-md border border-border p-3 text-sm">
               <span
                 className="rounded px-1.5 py-0.5 text-[10px] font-mono uppercase"
                 style={{ color: c, border: `1px solid color-mix(in oklch, ${c} 40%, transparent)` }}
               >
-                {f.severity}
+                {sev}
               </span>
-              <span>{f.message}</span>
+              <div className="min-w-0">
+                {f.label && <div className="text-xs font-mono text-muted-foreground">{f.label}</div>}
+                <div>{f.description ?? ""}</div>
+              </div>
             </li>
           );
         })}
@@ -253,8 +287,8 @@ export function FindingsList({ findings }: { findings: { severity: string; messa
   );
 }
 
-export function RecommendationsList({ items }: { items: string[] }) {
-  if (!items.length) return null;
+export function RecommendationsList({ items }: { items?: string[] }) {
+  if (!items?.length) return null;
   return (
     <div className="glass rounded-xl p-6">
       <h3 className="mb-3 font-semibold">Recommendations</h3>
