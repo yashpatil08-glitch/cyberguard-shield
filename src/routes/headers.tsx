@@ -8,7 +8,7 @@ import { ScoreGauge } from "@/components/cg/ScoreGauge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
-import { api, type HeadersResult } from "@/lib/api";
+import { api, type HeadersResult, type HeaderFinding } from "@/lib/api";
 import { saveReport } from "@/lib/reports";
 import { RecommendationsList, ReportActions } from "./url-analyzer";
 
@@ -21,15 +21,6 @@ export const Route = createFileRoute("/headers")({
   }),
   component: HeadersPage,
 });
-
-const KEY_HEADERS = [
-  { key: "strict-transport-security", label: "HSTS" },
-  { key: "content-security-policy", label: "Content-Security-Policy" },
-  { key: "x-frame-options", label: "X-Frame-Options" },
-  { key: "x-content-type-options", label: "X-Content-Type-Options" },
-  { key: "referrer-policy", label: "Referrer-Policy" },
-  { key: "permissions-policy", label: "Permissions-Policy" },
-];
 
 function HeadersPage() {
   const [url, setUrl] = useState("");
@@ -44,12 +35,14 @@ function HeadersPage() {
     try {
       const r = await api.checkHeaders(url.trim());
       setResult(r);
+      const findings = r.findings ?? [];
+      const present = findings.filter((f) => f.present).length;
       saveReport({
         kind: "headers",
-        title: `Headers audit — Grade ${r.grade}`,
+        title: `Headers audit — Grade ${r.grade ?? "?"}`,
         target: r.url,
-        score: r.score,
-        summary: `${r.present.length}/${r.present.length + r.missing.length} present`,
+        score: r.score ?? 0,
+        summary: `${present}/${findings.length} present`,
         data: r,
       });
       toast.success("Headers checked");
@@ -88,28 +81,41 @@ function HeadersPage() {
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} className="mt-6 space-y-6">
           <div className="grid gap-6 lg:grid-cols-3">
             <div className="glass flex flex-col items-center justify-center rounded-xl p-6">
-              <ScoreGauge value={result.score} label={`Grade ${result.grade}`} />
+              <ScoreGauge value={result.score ?? 0} label={`Grade ${result.grade ?? "?"}`} />
+              <p className="mt-2 text-sm">
+                Level: <span className="font-semibold">{result.risk_level ?? "—"}</span>
+              </p>
             </div>
             <div className="glass rounded-xl p-6 lg:col-span-2">
               <h3 className="mb-4 font-semibold">Header status</h3>
               <ul className="grid gap-2 sm:grid-cols-2">
-                {KEY_HEADERS.map((h) => {
-                  const present = Boolean(result.headers[h.key]);
+                {(result.findings ?? []).map((h: HeaderFinding) => {
+                  const present = !!h.present;
                   return (
                     <li
-                      key={h.key}
-                      className="flex items-center gap-3 rounded-lg border border-border bg-background/40 p-3 text-sm"
+                      key={h.header}
+                      className="flex items-start gap-3 rounded-lg border border-border bg-background/40 p-3 text-sm"
                     >
                       {present ? (
-                        <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-neon" />
+                        <CheckCircle2 className={`mt-0.5 h-4 w-4 flex-shrink-0 ${h.status === "weak" ? "text-warn" : "text-neon"}`} />
                       ) : (
-                        <XCircle className="h-4 w-4 flex-shrink-0 text-danger" />
+                        <XCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-danger" />
                       )}
-                      <div className="min-w-0">
-                        <div className="font-medium">{h.label}</div>
-                        <div className="truncate font-mono text-xs text-muted-foreground">
-                          {result.headers[h.key] ?? "missing"}
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="truncate font-medium">{h.header}</span>
+                          {typeof h.score === "number" && typeof h.max_score === "number" && (
+                            <span className="font-mono text-[10px] text-muted-foreground">
+                              {h.score}/{h.max_score}
+                            </span>
+                          )}
                         </div>
+                        <div className="truncate font-mono text-xs text-muted-foreground" title={h.value ?? ""}>
+                          {h.value ?? "missing"}
+                        </div>
+                        {h.note && (
+                          <div className="mt-1 text-xs text-muted-foreground">{h.note}</div>
+                        )}
                       </div>
                     </li>
                   );
@@ -118,23 +124,27 @@ function HeadersPage() {
             </div>
           </div>
 
-          {result.missing.length > 0 && (
-            <div className="glass rounded-xl p-6">
-              <h3 className="mb-3 font-semibold">Missing headers</h3>
-              <div className="flex flex-wrap gap-2">
-                {result.missing.map((m) => (
-                  <span
-                    key={m}
-                    className="rounded-md border border-danger/40 px-2 py-1 font-mono text-xs text-danger"
-                  >
-                    {m}
-                  </span>
-                ))}
+          {(() => {
+            const missing = (result.findings ?? []).filter((f) => !f.present);
+            if (!missing.length) return null;
+            return (
+              <div className="glass rounded-xl p-6">
+                <h3 className="mb-3 font-semibold">Missing headers</h3>
+                <div className="flex flex-wrap gap-2">
+                  {missing.map((m) => (
+                    <span
+                      key={m.header}
+                      className="rounded-md border border-danger/40 px-2 py-1 font-mono text-xs text-danger"
+                    >
+                      {m.header}
+                    </span>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
-          <RecommendationsList items={result.recommendations.map((r) => `${r.header}: ${r.message}`)} />
+          <RecommendationsList items={result.recommendations ?? []} />
           <ReportActions payload={{ kind: "headers", target: result.url, data: result }} />
         </motion.div>
       )}
